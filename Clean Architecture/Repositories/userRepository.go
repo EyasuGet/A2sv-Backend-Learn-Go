@@ -17,13 +17,13 @@ import (
 
 type UserRepo struct {
 	database   mongo.Database
-	collection string
+	collection *mongo.Collection
 }
 
-func NewUserRepo(db mongo.Database, collection string) domain.IUserRepo {
+func NewUserRepo(db *mongo.Database, collectionName string) *UserRepo {
 	return &UserRepo{
-		database:   db,
-		collection: collection,
+		database:   *db,
+		collection: db.Collection(collectionName),
 	}
 }
 
@@ -57,7 +57,7 @@ func initDB(username, password string) *mongo.Collection {
 
 func (ur *UserRepo) Create(user *domain.User) (string, error) {
 
-	userCollection := ur.database.Collection(ur.collection)
+	userCollection := ur.collection
 
 	// Generate a new ID for the user
 	objectID := primitive.NewObjectID()
@@ -83,7 +83,7 @@ func (ur *UserRepo) Login(usernameOrEmail, password string) (*domain.User, error
 			{"email": usernameOrEmail},
 		},
 	}
-	err := ur.database.Collection(ur.collection).FindOne(ctx, filter).Decode(&user)
+	err := ur.collection.FindOne(ctx, filter).Decode(&user)
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
@@ -99,7 +99,7 @@ func (ur *UserRepo) Login(usernameOrEmail, password string) (*domain.User, error
 func (ur *UserRepo) GetByID(id primitive.ObjectID) (*domain.User, error) {
 
 	var user domain.User
-	err := ur.database.Collection(ur.collection).FindOne(context.TODO(), bson.M{"_id": id}).Decode(&user)
+	err := ur.collection.FindOne(context.TODO(), bson.M{"_id": id}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (ur *UserRepo) GetByID(id primitive.ObjectID) (*domain.User, error) {
 }
 
 func (ur *UserRepo) DeleteByID(id primitive.ObjectID) error {
-	result, err := ur.database.Collection(ur.collection).DeleteOne(context.TODO(), bson.M{"_id": id})
+	result, err := ur.collection.DeleteOne(context.TODO(), bson.M{"_id": id})
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func (ur *UserRepo) PromoteUser(userID primitive.ObjectID, newRole string) error
 	defer cancel()
 
 	update := bson.M{"$set": bson.M{"role": newRole}}
-	result, err := ur.database.Collection(ur.collection).UpdateByID(ctx, userID, update)
+	result, err := ur.collection.UpdateByID(ctx, userID, update)
 	if err != nil {
 		return err
 	}
