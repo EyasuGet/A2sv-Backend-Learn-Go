@@ -11,23 +11,23 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type taskRepository struct {
+type TaskRepository struct {
     taskCollection *mongo.Collection
 }
 
-func NewTaskRepository(col *mongo.Collection) *taskRepository {
+func NewTaskRepository(col *mongo.Collection) *TaskRepository {
     
-    return &taskRepository{taskCollection: col}
+    return &TaskRepository{taskCollection: col}
 }
 
-func (tr *taskRepository) GetAll() ([]domain.Task, error) {
+func (tr *TaskRepository) GetAll() ([]*domain.Task, error) {
     cursor, err := tr.taskCollection.Find(context.TODO(), bson.D{})
     if err != nil {
         return nil, err
     }
     defer cursor.Close(context.TODO())
 
-    var tasks []domain.Task
+    var tasks []*domain.Task
     for cursor.Next(context.TODO()) {
         var taskDoc bson.M
         err := cursor.Decode(&taskDoc)
@@ -45,12 +45,12 @@ func (tr *taskRepository) GetAll() ([]domain.Task, error) {
             dueDate = primitive.DateTime(time.Now().Unix() * 1000)
         }
 
-        task := domain.Task{
+        task := &domain.Task{
             ID:          id.Hex(),
             Title:       taskDoc["title"].(string),
             Description: taskDoc["description"].(string),
             DueDate:     dueDate.Time(),
-            Status: 		taskDoc["status"].(string),
+            Status:      taskDoc["status"].(string),
         }
         tasks = append(tasks, task)
     }
@@ -58,22 +58,22 @@ func (tr *taskRepository) GetAll() ([]domain.Task, error) {
     return tasks, nil
 }
 
-func (tr *taskRepository) GetByID(id string) (domain.Task, error) {
+func (tr *TaskRepository) GetByID(id string) (*domain.Task, error) {
     objectID, err := primitive.ObjectIDFromHex(id)
     if err != nil {
-        return domain.Task{}, err
+        return nil, err
     }
 
     filter := bson.M{"_id": objectID}
     var taskDoc bson.M
     err = tr.taskCollection.FindOne(context.TODO(), filter).Decode(&taskDoc)
     if err != nil {
-        return domain.Task{}, err
+        return nil, err
     }
 
     oid, ok := taskDoc["_id"].(primitive.ObjectID)
     if !ok {
-        return domain.Task{}, errors.New("invalid ID type")
+        return nil, errors.New("invalid ID type")
     }
 
     dueDate, ok := taskDoc["due_date"].(primitive.DateTime)
@@ -81,7 +81,7 @@ func (tr *taskRepository) GetByID(id string) (domain.Task, error) {
         dueDate = primitive.DateTime(time.Now().Unix() * 1000) 
     }
 
-    task := domain.Task{
+    task := &domain.Task{
         ID:          oid.Hex(),
         Title:       taskDoc["title"].(string),
         Description: taskDoc["description"].(string),
@@ -91,7 +91,7 @@ func (tr *taskRepository) GetByID(id string) (domain.Task, error) {
     return task, nil
 }
 
-func (tr *taskRepository) Create(task domain.Task) (domain.Task, error) {
+func (tr *TaskRepository) Create(task *domain.Task) (*domain.Task, error) {
     newID := primitive.NewObjectID()
 
     doc := bson.M{
@@ -104,17 +104,18 @@ func (tr *taskRepository) Create(task domain.Task) (domain.Task, error) {
 
     _, err := tr.taskCollection.InsertOne(context.TODO(), doc)
     if err != nil {
-        return domain.Task{}, err
+        return nil, err
     }
 
     task.ID = newID.Hex()
     return task, nil
 }
 
-func (tr *taskRepository) Update(id string, task domain.Task) (domain.Task, error) {
+
+func (tr *TaskRepository) Update(id string, task *domain.Task) (*domain.Task, error) {
     objectID, err := primitive.ObjectIDFromHex(id)
     if err != nil {
-        return domain.Task{}, err
+        return nil, err
     }
 
     filter := bson.M{"_id": objectID}
@@ -129,13 +130,17 @@ func (tr *taskRepository) Update(id string, task domain.Task) (domain.Task, erro
 
     _, err = tr.taskCollection.UpdateOne(context.TODO(), filter, update)
     if err != nil {
-        return domain.Task{}, err
+        return nil, err
     }
 
-    return tr.GetByID(id)
+    updatedTask, err := tr.GetByID(id)
+    if err != nil {
+        return nil, err
+    }
+    return updatedTask, nil
 }
 
-func (tr *taskRepository) Delete(id string) error {
+func (tr *TaskRepository) Delete(id string) error {
     objectID, err := primitive.ObjectIDFromHex(id)
     if err != nil {
         return err
